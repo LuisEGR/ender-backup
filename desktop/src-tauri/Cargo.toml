@@ -1,0 +1,22 @@
+[package]
+name = "ender"
+version = "0.1.0"
+description = "Ender: photo and video backup from your iPhone to this computer"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+serde_json = "1"
+sys-locale = "0.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

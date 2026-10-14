@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ender Backup</title>
+<script>
+  // Light unless dark was picked in the sidebar (remembered on this computer).
+  try { if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch {}
+</script>
+<style>
+  /* Ender's colours (Woodland: daylight and after dark) in a plain desktop layout: a sidebar,
+     one view at a time, and no page scroll — only lists scroll inside their panels. */
+  :root {
+    color-scheme: light;
+    --bg: #FAF3E5; --side: #F3EAD9; --panel: #FFFCF4; --ink: #362A23; --muted: #827563;
+    --faint: rgba(130, 117, 99, .5); --line: #EDE3D1; --fill: rgba(130, 117, 99, .1);
+    --tint: #F6E3D6; --accent: #BB4639; --dot: #C94B3C; --link: #536448; --button: #536448; --button-ink: #FFF9ED;
+    --qr-bg: #FFFCF4; --toggle: #536448; --ok: #748759;
+    --jar: #F0E4CF; --jar-rim: #FFFCF4; --jar-edge: #EADFCB; --liquid: #BB4639; --liquid-top: #D46A51; --on-liquid: #FFF8EC;
+    --stem: #788A5F; --leaf: #87996C; --mstem: #FFF8E9; --mstem-edge: #E2D1B5; --cap: #BB4639; --spot: #FFF3DB; --glow: transparent; --warn: #B7792B; --danger: #B3261E; --field: rgba(130, 117, 99, .07);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #171F20; --side: #131A1B; --panel: #24302F; --ink: #F5EDDF; --muted: #ADB5A7;
+    --faint: rgba(173, 181, 167, .5); --line: #2E3B39; --fill: rgba(173, 181, 167, .14);
+    --tint: rgba(239, 145, 121, .14); --accent: #EF9179; --dot: #EF9179; --link: #C4D9AC; --button: #B5CBA1; --button-ink: #192B25;
+    --qr-bg: #E8E0D0; --toggle: #8FB083; --ok: #B1D4A0;
+    --jar: #202E31; --jar-rim: #304744; --jar-edge: #304744; --liquid: #8A4A47; --liquid-top: #BD7563; --on-liquid: #FFF3DF;
+    --stem: #A7C99A; --leaf: #789A80; --mstem: #D8EED1; --mstem-edge: #88B4A1; --cap: #87B6A4; --spot: #E9FFD7; --glow: rgba(182, 239, 195, .55); --warn: #E3B56B; --danger: #FF6B5E; --field: rgba(173, 181, 167, .08);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  .path { direction: rtl; text-align: left; } /* long paths lose their start, not the folder name */
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  .i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .app { display: grid; grid-template-columns: 210px 1fr; height: 100%; }
+
+  /* Sidebar */
+  .side { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 10px 12px; min-height: 0; }
+  .brand { padding: 0 10px 18px; }
+  .mark { display: block; width: 104px; height: 28px; color: var(--ink); margin-bottom: 4px; }
+  .mark circle { fill: var(--dot); }
+  .tag { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav button {
+    display: flex; align-items: center; gap: 10px; border: 0; background: none; text-align: left;
+    padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--muted); font-weight: 500;
+  }
+  nav button:hover { background: var(--fill); color: var(--ink); }
+  nav button.on { background: var(--panel); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  nav button.on .i { color: var(--accent); }
+  nav .badge { margin-left: auto; background: var(--accent); color: var(--button-ink); border-radius: 9px; font-size: 11px; padding: 0 6px; font-weight: 600; }
+  .side .foot { margin-top: 8px; padding: 10px; color: var(--muted); font-size: 11.5px; display: grid; gap: 2px; }
+  .theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; cursor: pointer; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: 1px; }
+  .dot.down { background: var(--danger); }
+  .dot.idle { background: var(--faint); }
+  .dot.busy { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  /* Main area */
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 16px 22px 12px; }
+  .top h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -.2px; }
+  .top .sub { color: var(--muted); }
+  .top .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  #requests:empty, #banners:empty { display: none; }
+  #requests, #banners { padding: 0 22px 10px; display: grid; gap: 8px; }
+  .banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); }
+  .banner.ask { border-color: var(--accent); background: var(--tint); }
+  .banner.warn { color: var(--warn); }
+  .banner p { margin: 0; flex: 1; }
+  .banner .buttons { display: flex; gap: 6px; }
+  .view { flex: 1; min-height: 0; padding: 0 22px 18px; display: none; }
+  .view.on { display: flex; flex-direction: column; gap: 14px; }
+  .scroll { overflow: auto; min-height: 0; }
+
+  /* Panels */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 0; }
+  .panel > h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin: 0; padding: 11px 14px 0; }
+  .pad { padding: 12px 14px; }
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .stat .big { font-size: 22px; font-weight: 700; letter-spacing: -.4px; line-height: 1.2; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; margin: 7px 0 5px; }
+  .bar > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .4s; }
+  .bar.thin { height: 3px; margin: 4px 0 2px; }
+  .bar.ok > span { background: var(--ok); }
+
+  /* Phones */
+  .phones { flex: 1; display: flex; flex-direction: column; }
+  .phones .list { flex: 1; }
+  .phone { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+  .phone:first-child { border-top: 0; }
+  .phone .ic { width: 34px; height: 34px; border-radius: 8px; background: var(--fill); display: grid; place-items: center; color: var(--muted); grid-row: span 3; }
+  .phone .name { font-weight: 600; font-size: 14px; }
+  .phone .right { text-align: right; }
+  .phone .wide { grid-column: 2 / 4; }
+  .state { display: inline-flex; align-items: center; font-size: 12px; color: var(--muted); margin-left: 8px; font-weight: 500; }
+  .state.uploading { color: var(--accent); }
+  .state.connected { color: var(--ok); }
+  .empty { color: var(--muted); padding: 22px 14px; text-align: center; }
+
+  /* Compression progress */
+  .progress .head { display: flex; justify-content: space-between; gap: 10px; }
+  .progress ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+  .progress li { color: var(--muted); font-size: 12px; }
+  .progress .name { color: var(--ink); }
+  .progress .pct { float: right; font-variant-numeric: tabular-nums; }
+
+  /* Settings */
+  .settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .panel > h2 + .row, .panel > h2 + .rows > .row:first-child { border-top: 0; }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .title { font-weight: 500; }
+  .row .hint { color: var(--muted); font-size: 12px; display: block; }
+  .row.stack { flex-direction: column; align-items: stretch; gap: 6px; }
+  .adv { display: none !important; }
+  body.advanced .adv { display: flex !important; }
+  body.advanced section.adv { display: block !important; }
+  input[type=text], select {
+    background: var(--field); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; min-width: 0;
+  }
+  input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  select { padding-right: 6px; max-width: 60%; }
+  /* Solid colours underneath the tint: the open list takes the select's own colours, and a
+     see-through background left it white in dark mode. */
+  select { background-color: var(--panel); background-image: linear-gradient(var(--field), var(--field)); }
+  option { background-color: var(--panel); color: var(--ink); }
+  .pathrow { display: flex; gap: 6px; }
+  .pathrow input { flex: 1; }
+  .inline-name { width: 50%; text-align: right; }
+
+  /* Switches (still checkboxes) */
+  .switch { appearance: none; -webkit-appearance: none; width: 34px; height: 20px; border-radius: 10px; background: var(--fill); position: relative; cursor: pointer; flex: none; margin: 0; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .2s; }
+  .switch:checked { background: var(--toggle); }
+  .switch.danger:checked { background: var(--danger); }
+  .switch:checked::after { transform: translateX(14px); }
+  .switch:disabled { opacity: .45; cursor: default; }
+
+  /* Buttons */
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 5px 12px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .btn:hover:not(:disabled) { background: var(--fill); }
+  .btn.primary { background: var(--button); color: var(--button-ink); border-color: transparent; }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--button); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .savebar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+  .savebar .msg { flex: 1; margin: 0; color: var(--muted); }
+  .msg.err { color: var(--danger); }
+  .msg.dirty { color: var(--ink); font-weight: 500; }
+
+  /* Pair */
+  .pair { display: grid; grid-template-columns: auto 1fr; gap: 26px; align-items: center; padding: 22px; }
+  .qr { width: 220px; height: 220px; border-radius: 12px; background: var(--qr-bg); padding: 10px; border: 1px solid var(--line); image-rendering: pixelated; }
+  .pair ol { margin: 0 0 14px; padding-left: 18px; display: grid; gap: 6px; }
+  .link { word-break: break-all; color: var(--muted); margin: 0 0 10px; }
+
+  /* Logs */
+  .logs { flex: 1; display: flex; flex-direction: column; }
+  .logs ul { list-style: none; margin: 0; padding: 4px 0; flex: 1; }
+  .logs li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 3px 14px; }
+  .logs li:hover { background: var(--fill); }
+  .logs time { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .logs li span { word-break: break-word; }
+
+  /* Overview */
+  .ov { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; gap: 14px; overflow-y: auto; }
+  .ov .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  /* The jar (as on the iPhone): how much space the smaller copies save, with a sprig and a mushroom. */
+  .duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 14px; align-items: stretch; }
+  .jarcard { display: flex; flex-direction: column; }
+  .jarwrap { position: relative; width: 150px; height: 150px; margin: 22px auto 14px; }
+  .jar {
+    width: 100%; height: 100%; border-radius: 50%; background: var(--jar); overflow: hidden; position: relative;
+    box-shadow: 0 0 0 6px var(--jar-rim), 0 0 0 7px var(--jar-edge), 0 12px 24px rgba(79, 56, 37, .14);
+  }
+  .jar .liquid[hidden] { display: none; }
+  .jar .liquid { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--liquid); transition: height .9s ease; }
+  .jar .liquid::before { content: ""; position: absolute; left: -10%; right: -10%; top: -6px; height: 12px; border-radius: 50%; background: var(--liquid-top); }
+  .jar .text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 6px; }
+  .jar .text strong { font-size: 36px; font-weight: 900; letter-spacing: -1.5px; line-height: 1; }
+  .jar .text span { font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .jar.wet .text { color: var(--on-liquid); }
+  .sprig { position: absolute; width: 34px; height: 47px; left: -18px; bottom: -6px; transform: rotate(-14deg); overflow: visible; }
+  .mushroom { position: absolute; width: 27px; height: 29px; right: -12px; bottom: -3px; overflow: visible; filter: drop-shadow(0 0 4px var(--glow)); }
+  .sprig .stem { fill: none; stroke: var(--stem); stroke-width: 2; }
+  .sprig .leaf { fill: var(--leaf); }
+  .mushroom .mstem { fill: var(--mstem); stroke: var(--mstem-edge); }
+  .mushroom .cap { fill: var(--cap); }
+  .mushroom .spot { fill: var(--spot); }
+  .jarcard .note { text-align: center; margin: 0 14px 14px; }
+  .comp .off a { color: var(--link); }
+  .recent .row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line); align-items: center; }
+  .recent .row .ic { width: 30px; height: 30px; border-radius: 8px; background: var(--tint); color: var(--accent); display: grid; place-items: center; }
+  .recent .row .when { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .recent .empty { padding: 14px; }
+  .side .grove { position: relative; height: 60px; margin: auto 14px 0; }
+  .side .grove .sprig { left: 2px; bottom: 0; width: 36px; height: 50px; }
+  .side .grove .mushroom { left: 30px; right: auto; bottom: 0; }
+  .phones .list { max-height: 260px; }
+  .ov .panel { display: flex; flex-direction: column; }
+  .lib .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 10px 14px 4px; }
+  .tile { display: flex; gap: 10px; align-items: flex-start; }
+  .tile .ic, .phone .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--tint); color: var(--accent); display: grid; place-items: center; flex: none; }
+  .tile .ic .i { width: 18px; height: 18px; }
+  .tile .n { font-size: 20px; font-weight: 700; letter-spacing: -.3px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .stack-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--fill); margin: 10px 14px 6px; }
+  .stack-bar span { height: 100%; transition: width .6s ease; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 14px 12px; color: var(--muted); font-size: 11.5px; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+  .c-photo { background: var(--accent); } .c-video { background: color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+  .c-copy { background: var(--ok); } .c-other { background: var(--faint); }
+
+  .comp .kind { padding: 10px 14px 0; }
+  .comp .kind .line { display: flex; justify-content: space-between; gap: 8px; }
+  .comp .ratio { position: relative; height: 8px; border-radius: 4px; background: var(--fill); margin: 6px 0 2px; overflow: hidden; }
+  .comp .ratio span { position: absolute; inset: 0 auto 0 0; background: var(--ok); border-radius: 4px; transition: width .6s ease; }
+  .comp .saved { color: var(--ok); font-weight: 600; }
+  .comp .running { margin: 12px 14px 12px; padding: 10px 12px; border-radius: 9px; background: var(--tint); }
+  .comp .off { padding: 14px; color: var(--muted); }
+
+  .phones .row1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .phone { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(120px, 34%); gap: 2px 12px; padding: 10px 14px; border-top: 1px solid var(--line); align-items: center; }
+  .phone:first-child { border-top: 0; }
+  .phone .ic { grid-row: span 2; background: var(--fill); color: var(--muted); }
+  .phone.uploading .ic { background: var(--tint); color: var(--accent); }
+  .phone .name { font-weight: 600; font-size: 13.5px; }
+  .phone .meter { grid-row: span 2; }
+  .phone .meter .bar { margin: 0 0 3px; }
+  .phone .meter .small { display: flex; justify-content: space-between; }
+
+  .phones .more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; color: var(--muted); padding: 8px 14px; text-align: left; cursor: pointer; font-size: 12px; }
+  .phones .more:hover { color: var(--ink); background: var(--fill); }
+  .add .body { display: flex; gap: 14px; align-items: center; padding: 12px 14px; }
+  .add .qr { width: 132px; height: 132px; padding: 6px; border-radius: 10px; cursor: zoom-in; flex: none; transition: width .25s, height .25s; }
+  .add .qr.big { width: 240px; height: 240px; cursor: zoom-out; }
+  .add ol { margin: 0 0 8px; padding-left: 16px; display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+  .add ol strong { color: var(--ink); }
+
+  /* Animations: receiving (moving stripes), compressing (shimmer), new numbers (pop) */
+  .bar.live > span, .ratio.live span {
+    background-image: linear-gradient(-45deg, rgba(255,255,255,.28) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.28) 50%, rgba(255,255,255,.28) 75%, transparent 75%);
+    background-size: 14px 14px; animation: stripes .7s linear infinite;
+  }
+  @keyframes stripes { to { background-position: 14px 0; } }
+  .shimmer { position: relative; overflow: hidden; }
+  .shimmer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); transform: translateX(-100%); animation: sweep 1.8s ease-in-out infinite; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+  .bounce { animation: bounce 1s ease-in-out infinite; }
+  @keyframes bounce { 50% { transform: translateY(-3px); } }
+  .squeeze { animation: squeeze 1.6s ease-in-out infinite; }
+  @keyframes squeeze { 50% { transform: scale(.82); } }
+  .pop { animation: pop .5s ease; }
+  @keyframes pop { 40% { transform: scale(1.06); color: var(--accent); } }
+  @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
+
+  @media (max-width: 980px) {
+    .ov { grid-template-columns: minmax(0, 1fr); }
+    .lib .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lib .tiles > :last-child { grid-column: span 2; }
+    .cols { grid-template-columns: 1fr 1fr; }
+    .cols > :first-child { grid-column: span 2; }
+    .settings { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 52px 1fr; }
+    .side { padding: 14px 6px; }
+    .brand, nav button span, nav .badge, .side .foot { display: none; }
+    nav button { justify-content: center; padding: 9px; }
+    .cols { grid-template-columns: 1fr; }
+    .cols > :first-child { grid-column: auto; }
+    .pair { grid-template-columns: 1fr; justify-items: center; }
+    .top, .view, #requests, #banners { padding-left: 14px; padding-right: 14px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 15h.01M11 15h6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-squeeze" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg class="mark" viewBox="0 -18 326 89" role="img" aria-label="ender."><g fill="currentColor" fill-rule="evenodd"><path d="M60 38C60 20 48 8 30 8C12 8 0 21 0 39C0 58 13 70 31 70C43 70 53 66 60 58L44 49C39 55 22 55 20 43H60ZM20 31C22 20 38 20 41 31Z"/><path d="M65 69V37C65 18 77 8 95 8C113 8 125 18 125 37V69H105V38C105 30 102 26 95 26C88 26 85 30 85 38V69Z"/><path d="M174 -18H194V39C194 58 181 70 163 70C144 70 131 58 131 39C131 21 143 8 161 8C166 8 170 9 174 12ZM151 39C151 47 155 52 163 52C171 52 175 47 175 39C175 31 171 26 163 26C155 26 151 31 151 39Z"/><path transform="translate(200 0)" d="M60 38C60 20 48 8 30 8C12 8 0 21 0 39C0 58 13 70 31 70C43 70 53 66 60 58L44 49C39 55 22 55 20 43H60ZM20 31C22 20 38 20 41 31Z"/><path d="M265 69V38C265 17 278 8 299 8V27C289 27 285 31 285 41V69Z"/></g><circle cx="314" cy="59" r="12"/></svg>
+      <div class="tag">Photo &amp; video backup</div>
+    </div>
+    <nav id="nav">
+      <button data-view="overview"><svg class="i"><use href="#i-home"/></svg><span>Overview</span><b class="badge" id="pairBadge" hidden></b></button>
+      <button data-view="settings"><svg class="i"><use href="#i-gear"/></svg><span>Settings</span></button>
+      <button data-view="logs"><svg class="i"><use href="#i-list"/></svg><span>Logs</span></button>
+    </nav>
+    <div class="grove" aria-hidden="true"><svg class="sprig" viewBox="0 0 60 90" aria-hidden="true"><path class="stem" d="M34 84Q19 50 24 10"/><path class="leaf" d="M26 62Q1 59 5 38Q24 39 26 62M23 40Q3 32 11 15Q27 20 23 40M27 64Q48 64 51 42Q29 42 27 64M23 38Q45 30 39 12Q22 17 23 38"/></svg><svg class="mushroom" viewBox="0 0 50 55" aria-hidden="true"><path class="mstem" d="M22 48l2-24h10l3 24Z"/><path class="cap" d="M8 27Q11 6 28 6Q43 7 47 27Q28 33 8 27"/><ellipse class="spot" cx="19" cy="19" rx="4" ry="3"/><ellipse class="spot" cx="33" cy="13" rx="3" ry="2"/></svg></div>
+    <div class="foot">
+      <div><span class="dot" id="statusDot"></span><span id="status">Connecting…</span></div>
+      <div id="version"></div>
+      <label class="theme"><span>Dark mode</span><input type="checkbox" class="switch" id="theme"></label>
+    </div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <h1 id="viewTitle">Overview</h1>
+      <span class="sub ellipsis" id="viewSub"></span>
+      <div class="right" id="viewActions"></div>
+    </header>
+    <div id="requests" data-dyn></div>
+    <div id="banners" data-dyn></div>
+
+    <!-- Overview -->
+    <section class="view" data-view="overview" data-title="Overview">
+      <div class="ov">
+        <div class="col">
+        <div class="panel lib">
+          <h2>Backed up on this computer</h2>
+          <div class="tiles">
+            <div class="tile"><span class="ic"><svg class="i"><use href="#i-photo"/></svg></span>
+              <div><div class="n" id="libPhotos">—</div><div class="muted small" id="libPhotosSub">photos</div></div></div>
+            <div class="tile"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span>
+              <div><div class="n" id="libVideos">—</div><div class="muted small" id="libVideosSub">videos</div></div></div>
+            <div class="tile"><span class="ic"><svg class="i"><use href="#i-disk"/></svg></span>
+              <div style="min-width:0"><div class="n" id="libFree">—</div><div class="muted small ellipsis path" id="ovDest" data-dyn></div></div></div>
+          </div>
+          <div class="stack-bar" id="diskBar"></div>
+          <div class="legend" id="diskLegend" data-dyn></div>
+        </div>
+        <div class="panel phones">
+          <h2>Phones</h2>
+          <div class="list scroll" id="devices" data-dyn></div>
+        </div>
+        <div class="duo">
+          <div class="panel jarcard">
+            <h2>Space saved</h2>
+            <div class="jarwrap">
+              <div class="jar" id="jar"><div class="liquid" id="jarLiquid"></div>
+                <div class="text"><strong id="jarPct">—</strong><span id="jarSub">smaller</span></div></div>
+              <svg class="sprig" viewBox="0 0 60 90" aria-hidden="true"><path class="stem" d="M34 84Q19 50 24 10"/><path class="leaf" d="M26 62Q1 59 5 38Q24 39 26 62M23 40Q3 32 11 15Q27 20 23 40M27 64Q48 64 51 42Q29 42 27 64M23 38Q45 30 39 12Q22 17 23 38"/></svg>
+              <svg class="mushroom" viewBox="0 0 50 55" aria-hidden="true"><path class="mstem" d="M22 48l2-24h10l3 24Z"/><path class="cap" d="M8 27Q11 6 28 6Q43 7 47 27Q28 33 8 27"/><ellipse class="spot" cx="19" cy="19" rx="4" ry="3"/><ellipse class="spot" cx="33" cy="13" rx="3" ry="2"/></svg>
+            </div>
+            <p class="muted small note" id="jarNote"></p>
+          </div>
+          <div class="panel recent">
+            <h2>Recently backed up</h2>
+            <div class="list scroll" id="recent" data-dyn></div>
+          </div>
+        </div>
+        </div>
+        <div class="col">
+
+        <div class="panel comp">
+          <h2>Compression</h2>
+          <div id="compBody" data-dyn></div>
+          <div class="running" id="compressProgress" hidden>
+            <div class="progress">
+              <div class="head"><strong><svg class="i squeeze" style="color:var(--accent);vertical-align:-3px;margin-right:4px"><use href="#i-squeeze"/></svg><span id="progressCount"></span></strong><span class="muted small" id="progressEta"></span></div>
+              <div class="bar shimmer"><span id="progressBar"></span></div>
+              <ul id="progressItems" data-dyn></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel add">
+          <h2>Add a phone</h2>
+          <div class="body">
+            <img class="qr" id="qr" alt="Pairing QR code" title="Click to enlarge">
+            <div style="min-width:0">
+              <ol>
+                <li>Open the <strong>Ender</strong> app on the iPhone.</li>
+                <li>Pick <strong id="pairName" data-dyn>this computer</strong>, or tap <strong>Scan QR code</strong>.</li>
+                <li>Approve the request that shows up here.</li>
+              </ol>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn" id="copyLink">Copy link</button>
+                <button class="btn" id="newToken" title="Phones already paired will have to scan again">New code</button>
+              </div>
+              <p class="link mono small ellipsis" id="pairLink" data-dyn style="margin:8px 0 0"></p>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" data-view="settings" data-title="Settings">
+      <div class="settings scroll" style="flex:1">
+        <div style="display:grid;gap:14px;align-content:start">
+          <section class="panel">
+            <h2>Saving to</h2>
+            <div class="row stack">
+              <div class="pathrow">
+                <input type="text" id="dest" spellcheck="false" autocomplete="off" aria-label="Backup folder">
+                <button class="btn" id="choose">Choose…</button>
+                <button class="btn" id="openFolder">Open</button>
+              </div>
+              <span class="hint" id="indexStatus"></span>
+            </div>
+            <label class="row">
+              <span class="grow"><span class="title">Separate folder for each phone</span>
+                <span class="hint">Off: everything goes straight into the folder above.</span></span>
+              <input type="checkbox" class="switch" id="deviceFolders">
+            </label>
+            <label class="row">
+              <span class="grow"><span class="title">Folder for each album</span>
+                <span class="hint">Photos in an album (e.g. WhatsApp) go in a folder named after it; a photo in several albums is hard-linked into each.</span></span>
+              <input type="checkbox" class="switch" id="albumFolders">
+            </label>
+            <div class="row adv">
+              <span class="grow"><span class="title">Rescan the folder</span>
+                <span class="hint">Look again for photos already here, so they aren't sent twice.</span></span>
+              <button class="btn" id="rescan">Rescan</button>
+            </div>
+            <div class="row adv">
+              <span class="grow"><span class="title">Drive</span>
+                <span class="hint" id="driveInfo"></span></span>
+              <button class="btn" id="speedtest">Test speed</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>This computer</h2>
+            <label class="row">
+              <span class="grow title">Name in the app</span>
+              <input type="text" id="name" class="inline-name" spellcheck="false" autocomplete="off">
+            </label>
+            <label class="row">
+              <span class="grow"><span class="title">Language</span>
+                <span class="hint">Of this window and the dialogs on this computer.</span></span>
+              <select id="language" data-dyn></select>
+            </label>
+            <div class="row adv stack">
+              <span class="title">Network</span>
+              <span class="hint" id="netInfo"></span>
+            </div>
+            <div class="row adv stack">
+              <span class="title">Settings file</span>
+              <span class="hint mono" id="cfgPath" data-dyn style="word-break:break-all"></span>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" style="align-self:start">
+          <h2>Compression</h2>
+          <label class="row">
+            <span class="grow"><span class="title">Compress photos</span>
+              <span class="hint">A smaller copy of each JPEG, PNG and HEIC, next to the original.</span></span>
+            <input type="checkbox" class="switch" id="compress">
+          </label>
+          <div class="row adv">
+            <span class="grow title">Photo format</span>
+            <select id="format"><option value="avif">AVIF</option></select>
+          </div>
+          <div class="row adv stack">
+            <div style="display:flex;align-items:center;gap:12px"><span class="grow title">Photo quality</span><select id="photoLevel"></select></div>
+            <span class="hint" id="photoLevelHint"></span>
+          </div>
+          <label class="row">
+            <span class="grow"><span class="title">Compress videos</span>
+              <span class="hint">An AV1 copy of each video (Name.av1.mp4), keeping HDR, Dolby Vision and sound.</span></span>
+            <input type="checkbox" class="switch" id="compressVideos">
+          </label>
+          <div class="row" id="videoReasonRow" hidden><span class="hint" id="videoReason" style="color:var(--warn)"></span></div>
+          <div class="row adv stack">
+            <div style="display:flex;align-items:center;gap:12px"><span class="grow title">Video quality</span><select id="videoLevel"></select></div>
+            <span class="hint" id="videoLevelHint"></span>
+          </div>
+          <label class="row">
+            <span class="grow"><span class="title">Delete originals after compressing</span>
+              <span class="hint">Off: both files are kept so you can compare. On: each original is deleted once its copy is saved. Can't be undone.</span></span>
+            <input type="checkbox" class="switch danger" id="removeOriginals">
+          </label>
+          <div class="row adv">
+            <span class="grow"><span class="title">Get deleted originals back</span>
+              <span class="hint" id="restoreHint">Phones send the originals again for items whose original was deleted after compressing. The compressed copies stay.</span></span>
+            <button class="btn" id="restoreOriginals">Get them back</button>
+          </div>
+          <div class="row stack"><span class="hint" id="compressStatus"></span></div>
+        </section>
+      </div>
+      <div class="panel savebar">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" class="switch" id="advanced"> <span>Advanced</span>
+        </label>
+        <p class="msg" id="msg">All changes saved</p>
+        <button class="btn primary" id="save" disabled>Save</button>
+      </div>
+    </section>
+
+    <!-- Logs -->
+    <section class="view" data-view="logs" data-title="Logs">
+      <div class="panel logs">
+        <div class="row" style="border-top:0;border-bottom:1px solid var(--line)">
+          <input type="text" id="logFilter" placeholder="Filter…" spellcheck="false" style="flex:1">
+          <span class="muted small" id="logCount"></span>
+        </div>
+        <ul class="scroll" id="events" data-dyn></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const TITLE = "Ender Backup";
+let dirty = false, lastPair = "", lastSeq = -1, events = [], state = null;
+
+// --- Language ----------------------------------------------------------------
+// The page is written in English; STRINGS has the other languages, keyed by the English
+// text, with {name} placeholders. To add a language: a table here, its name in
+// LANGUAGE_NAMES, and the server's few messages in i18n.go.
+const LANGUAGE_NAMES = { en: "English", es: "Español" };
+const STRINGS = {
+  es: {
+    "Photo & video backup": "Respaldo de fotos y videos",
+    "Overview": "Resumen",
+    "Settings": "Configuración",
+    "Logs": "Registro",
+    "Connecting…": "Conectando…",
+    "Dark mode": "Modo oscuro",
+    "Backed up on this computer": "Respaldado en esta computadora",
+    "photos": "fotos",
+    "videos": "videos",
+    "Phones": "Teléfonos",
+    "Space saved": "Espacio ahorrado",
+    "smaller": "más pequeño",
+    "no copies yet": "aún sin copias",
+    "Recently backed up": "Respaldado recientemente",
+    "Compression": "Compresión",
+    "Add a phone": "Agregar un teléfono",
+    "Open the": "Abre la app",
+    "app on the iPhone.": "en el iPhone.",
+    "Pick": "Elige",
+    ", or tap": ", o toca",
+    "Scan QR code": "Escanear código QR",
+    "Approve the request that shows up here.": "Aprueba la solicitud que aparecerá aquí.",
+    "Copy link": "Copiar enlace",
+    "Copied": "Copiado",
+    "New code": "Código nuevo",
+    "Pairing QR code": "Código QR de vinculación",
+    "Click to enlarge": "Clic para ampliar",
+    "Phones already paired will have to scan again": "Los teléfonos ya vinculados tendrán que escanear de nuevo",
+    "Saving to": "Guardando en",
+    "Backup folder": "Carpeta de respaldo",
+    "Choose…": "Elegir…",
+    "Open": "Abrir",
+    "Separate folder for each phone": "Una carpeta para cada teléfono",
+    "Off: everything goes straight into the folder above.": "Desactivado: todo va directamente a la carpeta de arriba.",
+    "Folder for each album": "Una carpeta para cada álbum",
+    "Photos in an album (e.g. WhatsApp) go in a folder named after it; a photo in several albums is hard-linked into each.": "Las fotos de un álbum (p. ej. WhatsApp) van a una carpeta con su nombre; una foto que está en varios álbumes se enlaza en cada uno.",
+    "Rescan the folder": "Volver a revisar la carpeta",
+    "Look again for photos already here, so they aren't sent twice.": "Busca de nuevo las fotos que ya están aquí, para que no se envíen dos veces.",
+    "Rescan": "Revisar",
+    "Drive": "Disco",
+    "Test speed": "Probar velocidad",
+    "This computer": "Esta computadora",
+    "Name in the app": "Nombre en la app",
+    "Language": "Idioma",
+    "Of this window and the dialogs on this computer.": "De esta ventana y de los cuadros de diálogo en esta computadora.",
+    "System ({name})": "Sistema ({name})",
+    "Network": "Red",
+    "Settings file": "Archivo de configuración",
+    "Compress photos": "Comprimir fotos",
+    "A smaller copy of each JPEG, PNG and HEIC, next to the original.": "Una copia más pequeña de cada JPEG, PNG y HEIC, junto al original.",
+    "Photo format": "Formato de foto",
+    "Photo quality": "Calidad de foto",
+    "Compress videos": "Comprimir videos",
+    "An AV1 copy of each video (Name.av1.mp4), keeping HDR, Dolby Vision and sound.": "Una copia AV1 de cada video (Nombre.av1.mp4), conservando HDR, Dolby Vision y el sonido.",
+    "Video quality": "Calidad de video",
+    "Delete originals after compressing": "Borrar los originales después de comprimir",
+    "Off: both files are kept so you can compare. On: each original is deleted once its copy is saved. Can't be undone.": "Desactivado: se conservan ambos archivos para que puedas compararlos. Activado: cada original se borra cuando su copia está guardada. No se puede deshacer.",
+    "Get deleted originals back": "Recuperar los originales borrados",
+    "Phones send the originals again for items whose original was deleted after compressing. The compressed copies stay.": "Los teléfonos vuelven a enviar los originales de los elementos cuyo original se borró después de comprimir. Las copias comprimidas se quedan.",
+    "Get them back": "Recuperarlos",
+    "Advanced": "Avanzado",
+    "All changes saved": "Todos los cambios guardados",
+    "You have unsaved changes": "Tienes cambios sin guardar",
+    "Save": "Guardar",
+    "Saved.": "Guardado.",
+    "Filter…": "Filtrar…",
+    "never": "nunca",
+    "just now": "ahora mismo",
+    "{n} min ago": "hace {n} min",
+    "{n} h ago": "hace {n} h",
+    "yesterday": "ayer",
+    "{n} days ago": "hace {n} días",
+    "less than a minute left": "falta menos de un minuto",
+    "about {m} min left": "faltan unos {m} min",
+    "about {d} day left": "falta alrededor de {d} día",
+    "about {d} days left": "faltan unos {d} días",
+    "about {h} h left": "faltan unas {h} h",
+    "about {h} h {r} min left": "faltan unas {h} h {r} min",
+    "“{name}” · {n} phone": "“{name}” · {n} teléfono",
+    "“{name}” · {n} phones": "“{name}” · {n} teléfonos",
+    "Recent activity on this computer": "Actividad reciente en esta computadora",
+    "Server not running": "El servidor no está funcionando",
+    "Running · port {port}": "Funcionando · puerto {port}",
+    "{saved} saved by smaller copies of {total}": "{saved} ahorrados con copias más pequeñas de {total}",
+    "Turn on compression in Settings to keep smaller copies.": "Activa la compresión en Configuración para guardar copias más pequeñas.",
+    "Nothing yet. Files show up here as phones back up.": "Nada todavía. Los archivos aparecen aquí a medida que los teléfonos respaldan.",
+    "{size} on disk": "{size} en disco",
+    "{a} originals + {b} compressed copies": "{a} de originales + {b} de copias comprimidas",
+    "{size} free": "{size} libres",
+    "Photo originals {size}": "Fotos originales {size}",
+    "Video originals {size}": "Videos originales {size}",
+    "Compressed copies {size}": "Copias comprimidas {size}",
+    "Other files {size}": "Otros archivos {size}",
+    "of {size}": "de {size}",
+    "none compressed yet": "ninguno comprimido aún",
+    "off": "desactivado",
+    "{n} copies · {before} → {after}": "{n} copias · {before} → {after}",
+    "{size} saved": "{size} ahorrados",
+    "{n} originals deleted": "{n} originales borrados",
+    "{n} waiting": "{n} en espera",
+    "{n} kept as they were": "{n} se quedaron como estaban",
+    "{n} couldn't be read": "{n} no se pudieron leer",
+    "Off. Turn it on in {settings} to keep a smaller copy of each photo and video.": "Desactivada. Actívala en {settings} para guardar una copia más pequeña de cada foto y video.",
+    "Photos": "Fotos",
+    "Videos": "Videos",
+    "Photo": "Foto",
+    "No phones yet — scan the code with the Ender app.": "Aún no hay teléfonos: escanea el código con la app Ender.",
+    "Backing up": "Respaldando",
+    "Connected": "Conectado",
+    "Receiving {name}": "Recibiendo {name}",
+    "{n} this session": "{n} en esta sesión",
+    "{n} backed up · {size} · last backup {when}": "{n} respaldados · {size} · último respaldo {when}",
+    "{n} deleted on phone": "{n} borrados en el teléfono",
+    "{n} items": "{n} elementos",
+    "All backed up": "Todo respaldado",
+    "{n} left": "faltan {n}",
+    "{n} more with nothing backed up": "{n} más sin nada respaldado",
+    "Show fewer": "Mostrar menos",
+    "{n} compressed, {size} saved": "{n} comprimidos, {size} ahorrados",
+    "{n} to go": "faltan {n}",
+    "{n} originals always kept (their copy can't hold everything)": "{n} originales que siempre se conservan (su copia no puede guardarlo todo)",
+    "{n} kept as they were (no space to gain)": "{n} se quedaron como estaban (no había espacio que ganar)",
+    "Nothing compressed yet.": "Nada comprimido todavía.",
+    "Looking for photos already in this folder… {n} files so far": "Buscando las fotos que ya están en esta carpeta… {n} archivos hasta ahora",
+    "{n} files in this folder are recognised by the app.": "La app reconoce {n} archivos en esta carpeta.",
+    "{n} files in this folder are recognised by the app, {f} of them favorites.": "La app reconoce {n} archivos en esta carpeta, {f} de ellos favoritos.",
+    "testing write speed…": "probando la velocidad de escritura…",
+    "writes {speed}/s": "escribe {speed}/s",
+    "this folder uses {size}": "esta carpeta ocupa {size}",
+    "Test how fast this drive writes": "Prueba qué tan rápido escribe este disco",
+    "Waiting for {n} originals ({size}) from the phones.": "Esperando {n} originales ({size}) de los teléfonos.",
+    "Port {port}": "Puerto {port}",
+    "Compressing {i} of {n}": "Comprimiendo {i} de {n}",
+    " and {n} more": " y {n} más",
+    "{a} of {b}": "{a} de {b}",
+    "{n} entries": "{n} entradas",
+    "Nothing matches.": "Nada coincide.",
+    "Nothing yet.": "Nada todavía.",
+    "pairing request": "solicitud de vinculación",
+    "{name} wants to pair.": "{name} quiere vincularse.",
+    "Only approve if you just picked this computer in the Ender app.": "Aprueba solo si acabas de elegir esta computadora en la app Ender.",
+    "Deny": "Rechazar",
+    "Approve": "Aprobar",
+    "Typical size: HEIC {heic}%, JPEG {jpeg}%, screenshots {png}% of the original (SSIMULACRA 2 ≈ {s}).": "Tamaño típico: HEIC {heic} %, JPEG {jpeg} %, capturas de pantalla {png} % del original (SSIMULACRA 2 ≈ {s}).",
+    "A copy that wouldn't save 10% isn't kept.": "No se guarda una copia que no ahorre al menos un 10 %.",
+    "The encoder setting is searched per video to reach it (slower); a copy that wouldn't save 10% isn't kept.": "El ajuste del codificador se busca para cada video hasta alcanzarla (más lento); no se guarda una copia que no ahorre al menos un 10 %.",
+    "Delete each original photo and video once its compressed copy is saved?\n\nThe originals can't be recovered afterwards.": "¿Borrar cada foto y video original cuando su copia comprimida esté guardada?\n\nLos originales no se podrán recuperar después.",
+    "Choose a folder in the window that just opened…": "Elige una carpeta en la ventana que se acaba de abrir…",
+    "Ask the phones to send the deleted originals again?\n\nOnly items still on a phone can come back. Make sure there's enough free space.": "¿Pedir a los teléfonos que vuelvan a enviar los originales borrados?\n\nSolo pueden volver los que sigan en un teléfono. Asegúrate de que haya suficiente espacio libre.",
+    "{n} originals ({size}) will come back as the phones back up.": "{n} originales ({size}) volverán a medida que los teléfonos respalden.",
+    "Create a new pairing code? Phones that are already paired will have to scan again.": "¿Crear un código de vinculación nuevo? Los teléfonos ya vinculados tendrán que escanear de nuevo.",
+    "Visually lossless": "Visualmente sin pérdida",
+    "Can't be told apart even flipping between the two at full size.": "No se distinguen ni alternando entre las dos a tamaño completo.",
+    "Indistinguishable side by side": "Indistinguible lado a lado",
+    "No visible difference next to the original at normal viewing.": "Sin diferencia visible junto al original al verla normalmente.",
+    "High": "Alta",
+    "Differences only when zoomed in and compared.": "Diferencias solo al hacer zoom y comparar.",
+    "Good": "Buena",
+    "Hard to notice without the original to compare.": "Difícil de notar sin el original para comparar.",
+    "Smallest": "La más pequeña",
+    "Visible softening when zoomed in.": "Suavizado visible al hacer zoom.",
+    "By camera (fast)": "Según la cámara (rápido)",
+    "A setting tuned for each camera, picked by eye: iPhone portrait CRF 44, iPhone landscape CRF 32, DJI CRF 38, others CRF 32. No quality search, so videos compress several times faster.": "Un ajuste para cada cámara, elegido a ojo: iPhone vertical CRF 44, iPhone horizontal CRF 32, DJI CRF 38, otros CRF 32. Sin búsqueda de calidad, así que los videos se comprimen varias veces más rápido.",
+    "Indistinguishable from the original (VMAF 98).": "Indistinguible del original (VMAF 98).",
+    "Excellent": "Excelente",
+    "No visible difference when watching normally (VMAF 96).": "Sin diferencia visible al verlo normalmente (VMAF 96).",
+    "Very good": "Muy buena",
+    "Rare, slight softness in fast or dark scenes (VMAF 94).": "Un suavizado leve y poco frecuente en escenas rápidas u oscuras (VMAF 94).",
+    "Some softness visible when looking for it (VMAF 92).": "Algo de suavizado visible si lo buscas (VMAF 92).",
+    "finding the quality": "buscando la calidad",
+    "checking the size": "revisando el tamaño",
+    "encoding": "codificando",
+    "Install ffmpeg on this computer to compress videos (winget install ffmpeg, brew install ffmpeg, or apt install ffmpeg).": "Instala ffmpeg en esta computadora para comprimir videos (winget install ffmpeg, brew install ffmpeg o apt install ffmpeg).",
+    "This computer's ffmpeg has no SVT-AV1 encoder; install a full build of ffmpeg to compress videos.": "El ffmpeg de esta computadora no tiene el codificador SVT-AV1; instala una versión completa de ffmpeg para comprimir videos.",
+  },
+};
+// Server texts with parts that vary (paths, errors).
+const PATTERNS = {
+  es: [
+    [/^Can't use (.+): (.+)\. Saving to (.+) until it's available again\.$/, "No se puede usar $1: $2. Guardando en $3 hasta que vuelva a estar disponible."],
+  ],
+};
+let LANG = "en";
+const ENGLISH = {}; // any translation → its English text, to re-translate the page
+for (const table of Object.values(STRINGS)) for (const [en, tr] of Object.entries(table)) ENGLISH[tr] = en;
+function t(text, vars) {
+  let r = STRINGS[LANG]?.[text];
+  if (r === undefined) {
+    r = text;
+    for (const [re, to] of PATTERNS[LANG] || []) if (re.test(text)) { r = text.replace(re, to); break; }
+  }
+  return vars ? r.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : r;
+}
+// Numbers and dates in the language chosen, with the computer's regional format when it matches.
+function locale() { const n = navigator.language || LANG; return n.toLowerCase().startsWith(LANG) ? n : LANG; }
+// Translates the page's own text (not what the script fills in, marked data-dyn).
+function translatePage() {
+  document.documentElement.lang = LANG;
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = walk.nextNode()); ) {
+    if (n.parentElement.closest("script, style, svg, [data-dyn]")) continue;
+    const text = n.nodeValue.trim();
+    if (text) n.nodeValue = n.nodeValue.replace(text, t(ENGLISH[text] || text));
+  }
+  for (const a of ["title", "placeholder", "aria-label", "alt"]) {
+    for (const el of document.querySelectorAll(`[${a}]`)) {
+      if (el.closest("[data-dyn], svg")) continue;
+      const v = el.getAttribute(a);
+      el.setAttribute(a, t(ENGLISH[v] || v));
+    }
+  }
+}
+function setLanguage(lang) {
+  if (lang === LANG) return;
+  LANG = lang;
+  translatePage();
+  for (const id of ["photoLevel", "videoLevel"]) $(id).innerHTML = ""; // refilled in the new language
+  lastRequests = null; lastSeq = -1;
+  show(current() || "overview");
+  if (state) refresh();
+}
+function fillLanguages(s) {
+  const sel = $("language"), system = LANGUAGE_NAMES[s.system_language] || "English";
+  const html = [`<option value="">${esc(t("System ({name})", { name: system }))}</option>`]
+    .concat((s.languages || ["en"]).map((l) => `<option value="${l}">${esc(LANGUAGE_NAMES[l] || l)}</option>`)).join("");
+  if (sel.dataset.html !== html) { sel.dataset.html = html; sel.innerHTML = html; }
+  sel.value = s.language_setting || "";
+}
+
+function store(key, value) {
+  try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch { return null; }
+}
+
+// The pairing QR in the theme's colours.
+function qrSrc(pairURL) {
+  const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  return `/ui/qr.png?theme=${theme}&v=${encodeURIComponent(pairURL)}`;
+}
+$("theme").checked = document.documentElement.dataset.theme === "dark";
+$("theme").onchange = () => {
+  const dark = $("theme").checked;
+  if (dark) document.documentElement.dataset.theme = "dark"; else delete document.documentElement.dataset.theme;
+  store("theme", dark ? "dark" : "light");
+  if (state && state.pair_url) $("qr").src = qrSrc(state.pair_url);
+};
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function num(n) { return Number(n || 0).toLocaleString(locale()); }
+function fmtBytes(n) {
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0; n = Number(n || 0);
+  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+  const digits = n < 10 && i > 0 ? 1 : 0;
+  return `${n.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${u[i]}`;
+}
+function ago(unix) {
+  if (!unix) return t("never");
+  const s = Date.now() / 1000 - unix;
+  if (s < 60) return t("just now");
+  if (s < 3600) return t("{n} min ago", { n: Math.round(s / 60) });
+  if (s < 86400) return t("{n} h ago", { n: Math.round(s / 3600) });
+  const d = Math.round(s / 86400);
+  if (d < 30) return d === 1 ? t("yesterday") : t("{n} days ago", { n: d });
+  return new Date(unix * 1000).toLocaleDateString(locale());
+}
+// "about 3 h 20 min left": rough on purpose.
+function fmtEta(secs) {
+  if (secs == null) return "";
+  if (secs < 60) return t("less than a minute left");
+  const m = Math.round(secs / 60);
+  if (m < 60) return t("about {m} min left", { m });
+  const h = Math.floor(m / 60), rm = m % 60;
+  if (h >= 24) { const d = Math.round(h / 24); return t(d === 1 ? "about {d} day left" : "about {d} days left", { d }); }
+  if (h >= 10) return t("about {h} h left", { h: Math.round(m / 60) });
+  const r = Math.round(rm / 10) * 10;
+  return r === 0 ? t("about {h} h left", { h }) : r === 60 ? t("about {h} h left", { h: h + 1 }) : t("about {h} h {r} min left", { h, r });
+}
+function setHTML(el, html) { if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } } // keeps text selectable
+
+// --- Views -----------------------------------------------------------------
+function show(view) {
+  if (!document.querySelector(`.view[data-view="${view}"]`)) view = "overview";
+  for (const v of document.querySelectorAll(".view")) v.classList.toggle("on", v.dataset.view === view);
+  for (const b of document.querySelectorAll("nav button")) b.classList.toggle("on", b.dataset.view === view);
+  $("viewTitle").textContent = t(document.querySelector(`.view[data-view="${view}"]`).dataset.title);
+  if (location.hash.slice(1) !== view) history.replaceState(null, "", "#" + view);
+  if (state) header(state);
+}
+$("nav").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.view); });
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+function current() { return (document.querySelector(".view.on") || {}).dataset?.view; }
+
+function header(s) {
+  const v = current();
+  $("viewSub").textContent = v === "overview" ? t(s.devices.length === 1 ? "“{name}” · {n} phone" : "“{name}” · {n} phones", { name: s.name, n: num(s.devices.length) })
+    : v === "logs" ? t("Recent activity on this computer") : "";
+}
+
+$("advanced").checked = store("advanced") === "1";
+document.body.classList.toggle("advanced", $("advanced").checked);
+$("advanced").addEventListener("change", () => {
+  document.body.classList.toggle("advanced", $("advanced").checked);
+  store("advanced", $("advanced").checked ? "1" : "0");
+});
+
+// --- Refresh ---------------------------------------------------------------
+async function refresh() {
+  let s;
+  try {
+    s = await (await fetch("/ui/state", { cache: "no-store" })).json();
+  } catch {
+    $("status").textContent = t("Server not running");
+    $("statusDot").className = "dot down";
+    return;
+  }
+  // The server was updated while this page stayed open (e.g. the desktop window hidden in
+  // the tray): load its page.
+  if (state && state.ui && s.ui && s.ui !== state.ui && !dirty) { location.reload(); return; }
+  state = s;
+  if (s.language && s.language !== LANG) setLanguage(s.language);
+  fillLanguages(s);
+  $("status").textContent = t("Running · port {port}", { port: s.port });
+  $("statusDot").className = "dot";
+  $("version").textContent = s.version ? `Ender Backup ${s.version}` : "";
+  header(s);
+
+  if (!dirty) {
+    $("dest").value = s.dest;
+    $("name").value = s.name;
+    $("deviceFolders").checked = s.device_folders;
+    $("albumFolders").checked = s.album_folders;
+    const c = s.compress || {};
+    $("compress").checked = !!c.compress;
+    $("format").value = c.format || "avif";
+    fillLevels("photoLevel", s.photo_levels || [], c.photo_level);
+    $("removeOriginals").checked = !!c.remove_originals;
+    $("compressVideos").checked = !!c.compress_videos;
+    fillLevels("videoLevel", s.video_levels || [], c.video_level);
+    compressControls();
+  }
+
+  // Banners shown on every view
+  const banners = [];
+  if (s.warning) banners.push(`<div class="banner warn"><p>${esc(t(s.warning))}</p></div>`);
+  setHTML($("banners"), banners.join(""));
+  renderRequests(s.pair_requests || []);
+
+  overview(s);
+  jarAndRecent(s);
+  settingsInfo(s);
+
+  if (s.pair_url !== lastPair) {
+    lastPair = s.pair_url;
+    $("qr").src = qrSrc(s.pair_url);
+    $("pairLink").textContent = s.pair_url;
+  }
+  $("pairName").textContent = s.name;
+
+  const newest = s.events.length ? s.events[s.events.length - 1].seq : 0;
+  if (newest !== lastSeq) { lastSeq = newest; events = s.events; renderLogs(); }
+}
+
+// The "Space saved" jar and the newest files received.
+function jarAndRecent(s) {
+  const cv = s.conversion || {};
+  const frac = cv.src_bytes ? Math.min(1, cv.saved_bytes / cv.src_bytes) : 0;
+  $("jarLiquid").style.height = `${Math.round(frac * 100)}%`;
+  $("jarLiquid").hidden = frac === 0; // no surface showing at the bottom of an empty jar
+  $("jar").classList.toggle("wet", frac >= 0.55); // the text sits on the liquid
+  $("jarPct").textContent = cv.converted ? `${Math.round(frac * 100)}%` : "—";
+  $("jarSub").textContent = cv.converted ? t("smaller") : t("no copies yet");
+  $("jarNote").textContent = cv.converted
+    ? t("{saved} saved by smaller copies of {total}", { saved: fmtBytes(cv.saved_bytes), total: fmtBytes(cv.src_bytes) })
+    : t("Turn on compression in Settings to keep smaller copies.");
+  const recent = s.recent || [];
+  setHTML($("recent"), recent.length ? recent.map((f) => {
+    const video = /\.(mov|mp4|m4v|3gp|avi|mkv)$/i.test(f.name);
+    return `<div class="row"><span class="ic"><svg class="i"><use href="#i-${video ? "video" : "photo"}"/></svg></span>
+      <div style="min-width:0"><div class="ellipsis">${esc(f.name)}</div>
+      <div class="muted small ellipsis">${fmtBytes(f.size)}${f.device ? " · " + esc(f.device) : ""}</div></div>
+      <span class="when">${ago(f.at)}</span></div>`;
+  }).join("") : `<p class="muted small empty">${t("Nothing yet. Files show up here as phones back up.")}</p>`);
+}
+
+// Numbers that change briefly "pop" so new arrivals catch the eye.
+function setNum(el, text) {
+  if (el.textContent === text) return;
+  const had = el.textContent !== "—" && el.textContent !== "";
+  el.textContent = text;
+  if (had) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+}
+function pct(a, b) { return b ? Math.round(100 * a / b) : 0; }
+const rates = {}; // per phone: bytes/s between the last two refreshes
+function rate(d) {
+  const now = Date.now(), r = rates[d.name] || {};
+  if (r.bytes != null && d.session_bytes > r.bytes && now > r.t) r.speed = (d.session_bytes - r.bytes) / ((now - r.t) / 1000);
+  if (d.state !== "uploading") r.speed = 0;
+  r.bytes = d.session_bytes || 0; r.t = now;
+  rates[d.name] = r;
+  return r.speed || 0;
+}
+
+let showAllPhones = false;
+$("devices").addEventListener("click", (e) => {
+  if (e.target.id === "morePhones") { showAllPhones = !showAllPhones; overview(state); }
+});
+
+function overview(s) {
+  const lib = s.library || { photos: {}, videos: {}, photo_copies: {}, video_copies: {} };
+  setNum($("libPhotos"), num(lib.photos.count));
+  const onDisk = (m) => t("{size} on disk", { size: fmtBytes((m.bytes || 0) + (m.copy_bytes || 0)) });
+  const split = (m) => t("{a} originals + {b} compressed copies", { a: fmtBytes(m.bytes || 0), b: fmtBytes(m.copy_bytes || 0) });
+  $("libPhotosSub").textContent = `${t("photos")} · ${onDisk(lib.photos)}`;
+  $("libPhotosSub").title = split(lib.photos);
+  setNum($("libVideos"), num(lib.videos.count));
+  $("libVideosSub").textContent = `${t("videos")} · ${onDisk(lib.videos)}`;
+  $("libVideosSub").title = split(lib.videos);
+  $("ovDest").textContent = s.dest;
+  $("ovDest").title = s.dest;
+  if (s.disk_total) {
+    setNum($("libFree"), t("{size} free", { size: fmtBytes(s.disk_free) }));
+    const used = s.disk_total - s.disk_free;
+    const pc = lib.photos.bytes || 0, vd = lib.videos.bytes || 0;
+    const cp = (lib.photos.copy_bytes || 0) + (lib.videos.copy_bytes || 0);
+    const other = Math.max(0, used - pc - vd - cp);
+    const w = (n) => (100 * n / s.disk_total).toFixed(2) + "%";
+    setHTML($("diskBar"), `<span class="c-photo" style="width:${w(pc)}"></span><span class="c-video" style="width:${w(vd)}"></span>` +
+      `<span class="c-copy" style="width:${w(cp)}"></span><span class="c-other" style="width:${w(other)}"></span>`);
+    setHTML($("diskLegend"), `<span><i class="c-photo"></i>${t("Photo originals {size}", { size: fmtBytes(pc) })}</span><span><i class="c-video"></i>${t("Video originals {size}", { size: fmtBytes(vd) })}</span>` +
+      (cp ? `<span><i class="c-copy"></i>${t("Compressed copies {size}", { size: fmtBytes(cp) })}</span>` : "") +
+      `<span><i class="c-other"></i>${t("Other files {size}", { size: fmtBytes(other) })}</span><span>${t("of {size}", { size: fmtBytes(s.disk_total) })}</span>`);
+  }
+
+  // Compression: before → after per kind, and the live run
+  const c = s.compress || {}, cv = s.conversion || {};
+  const running = !!(cv.progress && cv.progress.active);
+  const busy = (kind) => running && (cv.progress.items || []).some((it) => (it.kind === "video") === (kind === "video"));
+  const kind = (label, k, on, video) => {
+    if (!k || !k.count) return `<div class="kind"><div class="line"><strong>${label}</strong><span class="muted small">${on ? t("none compressed yet") : t("off")}</span></div></div>`;
+    const saved = k.before - k.after;
+    return `<div class="kind">
+      <div class="line"><strong>${label}</strong><span class="saved">−${pct(saved, k.before)}%</span></div>
+      <div class="ratio ${on && busy(video ? "video" : "photo") ? "live" : ""}"><span style="width:${(100 * k.after / k.before).toFixed(1)}%"></span></div>
+      <div class="line muted small"><span>${t("{n} copies · {before} → {after}", { n: num(k.count), before: fmtBytes(k.before), after: fmtBytes(k.after) })}</span><span>${t("{size} saved", { size: fmtBytes(saved) })}</span></div>
+      ${k.removed ? `<div class="muted small">${t("{n} originals deleted", { n: num(k.removed) })}</div>` : ""}
+    </div>`;
+  };
+  const anyOn = c.compress || c.compress_videos;
+  const extra = [];
+  if (cv.remaining && anyOn && !running) extra.push(t("{n} waiting", { n: num(cv.remaining) }));
+  if (cv.not_smaller) extra.push(t("{n} kept as they were", { n: num(cv.not_smaller) }));
+  if (cv.failed) extra.push(t("{n} couldn't be read", { n: num(cv.failed) }));
+  setHTML($("compBody"), !anyOn && !lib.photo_copies.count && !lib.video_copies.count
+    ? `<div class="off">${t("Off. Turn it on in {settings} to keep a smaller copy of each photo and video.", { settings: `<a href="#settings">${t("Settings")}</a>` })}</div>`
+    : kind(t("Photos"), lib.photo_copies, c.compress, false) + kind(t("Videos"), lib.video_copies, c.compress_videos, true) +
+      (extra.length ? `<p class="muted small" style="margin:8px 14px 0">${extra.join(" · ")}</p>` : "") +
+      (running ? "" : `<div style="height:12px"></div>`));
+  showProgress(running ? cv.progress : null);
+
+  // Phones: one compact row each; phones with nothing backed up that aren't connected
+  // fold into "N more".
+  const quiet = (d) => !d.assets && (d.state || "away") === "away";
+  const shown = showAllPhones ? s.devices : s.devices.filter((d) => !quiet(d));
+  const hiddenCount = s.devices.length - shown.length;
+  const html = s.devices.length === 0
+    ? `<p class="empty">${t("No phones yet — scan the code with the Ender app.")}</p>`
+    : shown.map((d) => {
+        const st = d.state || "away";
+        const label = st === "uploading" ? `<span class="state uploading"><span class="dot busy"></span>${t("Backing up")}</span>`
+          : st === "connected" ? `<span class="state connected"><span class="dot"></span>${t("Connected")}</span>`
+          : `<span class="state"><span class="dot idle"></span>${ago(d.last_seen_unix)}</span>`;
+        const speed = rate(d);
+        let line2;
+        if (st === "uploading") line2 = t("Receiving {name}", { name: `<span class="mono">${esc(d.current || "")}</span>` }) +
+          (speed ? ` · ${fmtBytes(speed)}/s` : "") + (d.session_items ? ` · ${t("{n} this session", { n: num(d.session_items) })}` : "");
+        else line2 = t("{n} backed up · {size} · last backup {when}", { n: num(d.assets), size: esc(d.size), when: ago(d.last_backup) }) +
+          (d.deleted ? ` · ${t("{n} deleted on phone", { n: num(d.deleted) })}` : "");
+        let meter = `<div class="meter muted small" style="text-align:right">${t("{n} items", { n: num(d.assets) })}</div>`;
+        if (d.library_total) {
+          const left = d.library_total - d.library_done;
+          meter = `<div class="meter"><div class="bar ${left === 0 ? "ok" : ""} ${st === "uploading" ? "live" : ""}"><span style="width:${(100 * d.library_done / d.library_total).toFixed(1)}%"></span></div>
+            <div class="small muted"><span>${left === 0 ? t("All backed up") : t("{n} left", { n: num(left) })}</span><span>${Math.floor(100 * d.library_done / d.library_total)}%</span></div></div>`;
+        }
+        const icon = st === "uploading" ? '<svg class="i bounce"><use href="#i-up"/></svg>' : '<svg class="i"><use href="#i-phone"/></svg>';
+        return `<div class="phone ${st}"><span class="ic">${icon}</span>
+          <div class="row1"><span class="name ellipsis">${esc(d.name || "iPhone")}</span>${label}</div>
+          ${meter}
+          <div class="muted small ellipsis">${line2}</div></div>`;
+      }).join("") + (hiddenCount ? `<button class="more" id="morePhones">${t("{n} more with nothing backed up", { n: num(hiddenCount) })}</button>`
+        : showAllPhones && s.devices.some(quiet) ? `<button class="more" id="morePhones">${t("Show fewer")}</button>` : "");
+  setHTML($("devices"), html);
+}
+
+function settingsInfo(s) {
+  $("videoReason").textContent = s.video_reason ? t(s.video_reason) : "";
+  $("videoReasonRow").hidden = !s.video_reason;
+  const cv = s.conversion || {};
+  const cs = [];
+  if (cv.converted) cs.push(t("{n} compressed, {size} saved", { n: num(cv.converted), size: fmtBytes(cv.saved_bytes) }) +
+    (cv.src_bytes ? ` (${Math.round(100 * cv.saved_bytes / cv.src_bytes)}%)` : ""));
+  if (cv.remaining && s.compress && (s.compress.compress || s.compress.compress_videos)) cs.push(t("{n} to go", { n: num(cv.remaining) }));
+  if (cv.removed) cs.push(t("{n} originals deleted", { n: num(cv.removed) }));
+  if (cv.kept_full) cs.push(t("{n} originals always kept (their copy can't hold everything)", { n: num(cv.kept_full) }));
+  if (cv.not_smaller) cs.push(t("{n} kept as they were (no space to gain)", { n: num(cv.not_smaller) }));
+  if (cv.failed) cs.push(t("{n} couldn't be read", { n: num(cv.failed) }));
+  $("compressStatus").textContent = cs.join(" · ") || t("Nothing compressed yet.");
+  $("compressStatus").parentElement.hidden = false;
+
+  $("indexStatus").textContent = s.indexing
+    ? t("Looking for photos already in this folder… {n} files so far", { n: num(s.indexed) })
+    : s.favorites ? t("{n} files in this folder are recognised by the app, {f} of them favorites.", { n: num(s.indexed), f: num(s.favorites) })
+    : t("{n} files in this folder are recognised by the app.", { n: num(s.indexed) });
+  $("rescan").disabled = s.indexing;
+  const dr = s.drive || {};
+  const parts = [dr.name, dr.connection].filter(Boolean);
+  if (dr.testing) parts.push(t("testing write speed…"));
+  else if (dr.write_speed) parts.push(t("writes {speed}/s", { speed: fmtBytes(dr.write_speed) }));
+  if (s.folder_bytes) parts.push(t("this folder uses {size}", { size: fmtBytes(s.folder_bytes) }));
+  $("driveInfo").textContent = parts.join(" · ") || t("Test how fast this drive writes");
+  $("speedtest").disabled = !!dr.testing;
+  $("restoreHint").textContent = s.originals_wanted
+    ? t("Waiting for {n} originals ({size}) from the phones.", { n: num(s.originals_wanted), size: fmtBytes(s.originals_wanted_bytes) })
+    : t("Phones send the originals again for items whose original was deleted after compressing. The compressed copies stay.");
+  $("netInfo").textContent = `${t("Port {port}", { port: s.port })} · ${s.hosts.join(", ")}${s.os ? ` · ${s.os}` : ""}`;
+  $("cfgPath").textContent = s.config_path;
+}
+
+// The live compression progress (null when nothing is being compressed).
+function showProgress(p) {
+  $("compressProgress").hidden = !p;
+  if (!p) return;
+  const total = Math.max(p.total || 0, p.done || 0);
+  $("progressCount").textContent = t("Compressing {i} of {n}", { i: num(Math.min(p.done + 1, total)), n: num(total) });
+  $("progressEta").textContent = fmtEta(p.eta_seconds);
+  let partial = 0; // items in progress count for their share
+  for (const it of p.items || []) partial += it.kind === "video" ? (it.percent || 0) / 100 : 0.5;
+  const frac = total ? Math.min(1, (p.done + partial) / total) : 0;
+  $("progressBar").style.width = (100 * frac).toFixed(1) + "%";
+  const items = p.items || [];
+  const videos = items.filter((it) => it.kind === "video");
+  const photos = items.filter((it) => it.kind !== "video");
+  let html = videos.map((it) => `<li><span class="pct">${Math.floor(it.percent || 0)}%</span>` +
+    `<span class="name">${esc(it.name)}</span> · ${esc(t(it.phase || "encoding"))}` +
+    `<div class="bar thin"><span style="width:${Math.min(100, it.percent || 0)}%"></span></div></li>`).join("");
+  if (photos.length) {
+    const shown = photos.slice(0, 2).map((it) => `<span class="name">${esc(it.name)}</span>`).join(", ");
+    html += `<li class="ellipsis">${photos.length === 1 ? t("Photo") : t("Photos")}: ${shown}` +
+      (photos.length > 2 ? t(" and {n} more", { n: num(photos.length - 2) }) : "") + "</li>";
+  }
+  $("progressItems").innerHTML = html;
+}
+
+// --- Logs ------------------------------------------------------------------
+function renderLogs() {
+  const q = $("logFilter").value.trim().toLowerCase();
+  const list = events.slice().reverse().filter((e) => !q || e.text.toLowerCase().includes(q));
+  $("logCount").textContent = q ? t("{a} of {b}", { a: num(list.length), b: num(events.length) }) : t("{n} entries", { n: num(events.length) });
+  $("events").innerHTML = list.length === 0
+    ? `<li class="empty" style="display:block">${events.length ? t("Nothing matches.") : t("Nothing yet.")}</li>`
+    : list.map((e) => `<li><time>${esc(e.time)}</time><span>${esc(e.text)}</span></li>`).join("");
+}
+$("logFilter").addEventListener("input", renderLogs);
+
+// --- Pairing requests ------------------------------------------------------
+let lastRequests = null;
+function renderRequests(reqs) {
+  const key = reqs.map((r) => r.id).join(",");
+  $("pairBadge").hidden = !reqs.length;
+  $("pairBadge").textContent = reqs.length;
+  if (key === lastRequests) return;
+  lastRequests = key;
+  document.title = reqs.length ? `(${reqs.length}) ${TITLE} — ${t("pairing request")}` : TITLE;
+  $("requests").innerHTML = reqs.map((r) => `
+    <div class="banner ask">
+      <svg class="i" style="color:var(--accent)"><use href="#i-phone"/></svg>
+      <p><strong>${t("{name} wants to pair.", { name: esc(r.device_name) })}</strong> ${t("Only approve if you just picked this computer in the Ender app.")}</p>
+      <div class="buttons">
+        <button class="btn" data-deny="${esc(r.id)}">${t("Deny")}</button>
+        <button class="btn primary" data-approve="${esc(r.id)}">${t("Approve")}</button>
+      </div>
+    </div>`).join("");
+}
+$("requests").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  const approve = b.dataset.approve !== undefined;
+  b.closest(".banner").remove();
+  try { await post(approve ? "/ui/pair/approve" : "/ui/pair/deny", { id: b.dataset.approve || b.dataset.deny }); }
+  catch (e) { say(e.message, true); }
+  lastRequests = null;
+  refresh();
+});
+
+// --- Settings --------------------------------------------------------------
+function say(text, isErr) {
+  $("msg").textContent = text || (dirty ? t("You have unsaved changes") : t("All changes saved"));
+  $("msg").className = "msg" + (isErr ? " err" : dirty && !text ? " dirty" : "");
+}
+function markDirty() { dirty = true; $("save").disabled = false; say(""); }
+for (const id of ["dest", "name"]) $(id).addEventListener("input", markDirty);
+for (const id of ["deviceFolders", "albumFolders"]) $(id).addEventListener("change", markDirty);
+
+let levels = {};
+function fillLevels(id, list, chosen) {
+  levels[id] = list;
+  const sel = $(id);
+  if (sel.options.length !== list.length) sel.innerHTML = list.map((l) => `<option value="${esc(l.id)}">${esc(t(l.label))}</option>`).join("");
+  sel.value = chosen;
+}
+function levelHints() {
+  const p = (levels.photoLevel || []).find((l) => l.id === $("photoLevel").value);
+  $("photoLevelHint").textContent = p
+    ? `${t(p.description)} ${t("Typical size: HEIC {heic}%, JPEG {jpeg}%, screenshots {png}% of the original (SSIMULACRA 2 ≈ {s}).", { heic: p.typical_size.heic, jpeg: p.typical_size.jpeg, png: p.typical_size.png, s: p.ssimulacra2 })}` : "";
+  const v = (levels.videoLevel || []).find((l) => l.id === $("videoLevel").value);
+  $("videoLevelHint").textContent = v
+    ? v.by_camera ? `${t(v.description)} ${t("A copy that wouldn't save 10% isn't kept.")}`
+      : `${t(v.description)} ${t("The encoder setting is searched per video to reach it (slower); a copy that wouldn't save 10% isn't kept.")}` : "";
+}
+function compressControls() {
+  const on = $("compress").checked, videos = $("compressVideos").checked;
+  $("format").disabled = $("photoLevel").disabled = !on;
+  $("videoLevel").disabled = !videos;
+  $("removeOriginals").disabled = !on && !videos;
+  levelHints();
+}
+for (const id of ["compress", "format", "photoLevel", "compressVideos", "videoLevel"]) $(id).addEventListener("input", () => { compressControls(); markDirty(); });
+$("removeOriginals").addEventListener("change", () => {
+  if ($("removeOriginals").checked && !confirm(t("Delete each original photo and video once its compressed copy is saved?\n\nThe originals can't be recovered afterwards."))) {
+    $("removeOriginals").checked = false;
+    return;
+  }
+  markDirty();
+});
+
+async function save() {
+  $("save").disabled = true;
+  try {
+    await post("/ui/settings", {
+      dest: $("dest").value, name: $("name").value, device_folders: $("deviceFolders").checked, album_folders: $("albumFolders").checked,
+      compress: $("compress").checked, format: $("format").value, photo_level: $("photoLevel").value,
+      remove_originals: $("removeOriginals").checked,
+      compress_videos: $("compressVideos").checked, video_level: $("videoLevel").value,
+    });
+    dirty = false;
+    say(t("Saved."));
+    refresh();
+  } catch (e) {
+    $("save").disabled = false;
+    say(e.message, true);
+  }
+}
+$("save").addEventListener("click", save);
+
+$("choose").addEventListener("click", async () => {
+  $("choose").disabled = true;
+  say(t("Choose a folder in the window that just opened…"));
+  try {
+    const r = await post("/ui/pick-folder");
+    if (r.cancelled) { say(""); return; }
+    $("dest").value = r.path;
+    await save();
+  } catch (e) { say(e.message, true); }
+  finally { $("choose").disabled = false; }
+});
+$("restoreOriginals").addEventListener("click", async () => {
+  if (!confirm(t("Ask the phones to send the deleted originals again?\n\nOnly items still on a phone can come back. Make sure there's enough free space."))) return;
+  try {
+    const r = await post("/ui/restore-originals");
+    say(t("{n} originals ({size}) will come back as the phones back up.", { n: num(r.count), size: fmtBytes(r.bytes) }));
+    refresh();
+  } catch (e) { say(e.message, true); }
+});
+$("speedtest").addEventListener("click", () => post("/ui/speedtest").then(refresh).catch((e) => say(e.message, true)));
+$("rescan").addEventListener("click", () => post("/ui/rescan").then(refresh).catch((e) => say(e.message, true)));
+$("openFolder").addEventListener("click", () => post("/ui/open-folder").catch((e) => say(e.message, true)));
+
+$("qr").addEventListener("click", () => $("qr").classList.toggle("big"));
+$("copyLink").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(lastPair);
+  $("copyLink").textContent = t("Copied");
+  setTimeout(() => ($("copyLink").textContent = t("Copy link")), 1500);
+});
+$("newToken").addEventListener("click", async () => {
+  if (!confirm(t("Create a new pairing code? Phones that are already paired will have to scan again."))) return;
+  try { await post("/ui/new-token"); refresh(); } catch (e) { say(e.message, true); }
+});
+
+$("language").addEventListener("change", async () => {
+  try {
+    const r = await post("/ui/language", { language: $("language").value });
+    setLanguage(r.language);
+  } catch (e) { say(e.message, true); }
+});
+
+show(location.hash.slice(1) || "overview");
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

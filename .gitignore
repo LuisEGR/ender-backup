@@ -1,0 +1,11 @@
+# Build outputs
+/bin/
+/photo-backup
+server/photo-backup
+*.exe
+
+# Local test data
+/test-dest/
+server.log
+
+.DS_Store

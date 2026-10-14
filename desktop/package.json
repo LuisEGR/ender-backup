@@ -1,0 +1,15 @@
+{
+  "name": "ender-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ender for Mac, Windows and Linux: the photo-backup server with a window and a tray icon (Tauri).",
+  "scripts": {
+    "sidecar": "node scripts/sidecar.mjs",
+    "dev": "node scripts/sidecar.mjs && tauri dev",
+    "build": "node scripts/sidecar.mjs && tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

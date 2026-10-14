@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ender Backup</title>
+<style>
+  /* Shown only until the server answers; then the window switches to its settings page. */
+  /* Woodland daylight, like the settings page's default. */
+  :root { --bg: #FAF3E5; --ink: #362A23; --muted: #827563; --accent: #BB4639; --dot: #C94B3C; --danger: #B3261E; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+  }
+  .mark { display: block; width: 200px; height: 55px; margin: 0 auto 6px; color: var(--ink); }
+  .mark circle { fill: var(--dot); }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .spin {
+    width: 26px; height: 26px; margin: 34px auto 14px; border-radius: 50%;
+    border: 3px solid color-mix(in srgb, var(--muted) 30%, transparent); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #msg { color: var(--muted); font-size: 14px; max-width: 420px; margin: 0 auto; line-height: 1.45; }
+  #msg.err { color: var(--danger); }
+</style>
+</head>
+<body>
+  <div>
+    <svg class="mark" viewBox="0 -18 326 89" role="img" aria-label="ender."><g fill="currentColor" fill-rule="evenodd"><path d="M60 38C60 20 48 8 30 8C12 8 0 21 0 39C0 58 13 70 31 70C43 70 53 66 60 58L44 49C39 55 22 55 20 43H60ZM20 31C22 20 38 20 41 31Z"/><path d="M65 69V37C65 18 77 8 95 8C113 8 125 18 125 37V69H105V38C105 30 102 26 95 26C88 26 85 30 85 38V69Z"/><path d="M174 -18H194V39C194 58 181 70 163 70C144 70 131 58 131 39C131 21 143 8 161 8C166 8 170 9 174 12ZM151 39C151 47 155 52 163 52C171 52 175 47 175 39C175 31 171 26 163 26C155 26 151 31 151 39Z"/><path transform="translate(200 0)" d="M60 38C60 20 48 8 30 8C12 8 0 21 0 39C0 58 13 70 31 70C43 70 53 66 60 58L44 49C39 55 22 55 20 43H60ZM20 31C22 20 38 20 41 31Z"/><path d="M265 69V38C265 17 278 8 299 8V27C289 27 285 31 285 41V69Z"/></g><circle cx="314" cy="59" r="12"/></svg>
+    <div class="sub">Photo &amp; video backup</div>
+    <div class="spin" id="spin"></div>
+    <p id="msg">Starting…</p>
+  </div>
+</body>
+</html>

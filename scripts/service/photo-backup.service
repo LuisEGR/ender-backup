@@ -1,0 +1,12 @@
+[Unit]
+Description=photo-backup server (iPhone backups over Wi-Fi)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/photo-backup serve -no-dialogs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
