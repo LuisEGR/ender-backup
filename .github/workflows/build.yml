@@ -76,6 +76,25 @@ jobs:
           releaseBody: Ender Backup __VERSION__ for Windows, macOS (Apple silicon) and Linux.
           releaseDraft: true
 
+      # Tauri notarizes the app but only signs the .dmg around it; notarize and staple the .dmg
+      # too (a downloaded, unnotarized .dmg is rejected by Gatekeeper), and replace the release copy.
+      - name: Notarize the DMG
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg=$(ls desktop/src-tauri/target/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$dmg"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # GitHub turns the spaces in asset names into dots.
+            cp "$dmg" "$RUNNER_TEMP/$(basename "$dmg" | tr ' ' '.')"
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/$(basename "$dmg" | tr ' ' '.')" --clobber
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ender-backup-${{ matrix.name }}
