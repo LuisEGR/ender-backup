@@ -1,4 +1,5 @@
-# The desktop app's installers for Windows, macOS and Linux (not signed yet).
+# The desktop app's installers for Windows, macOS and Linux. The macOS app is signed and
+# notarized (APPLE_* secrets); Windows and Linux builds are not signed yet.
 # - Run it by hand (Actions › Build › Run workflow): the installers are attached to the run.
 # - Push a tag (git tag v0.1.0 && git push origin v0.1.0): they also go to a draft GitHub
 #   release for that tag, to publish when ready. The tag should match the version in
@@ -59,6 +60,14 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS: Tauri imports the Developer ID certificate into a temporary keychain, signs,
+          # then notarizes with Apple and staples the ticket. Ignored on Windows and Linux.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: desktop
           # Only tag builds make a release; manual runs just build.
